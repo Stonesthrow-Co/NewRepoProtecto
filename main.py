@@ -1,5 +1,9 @@
 import markdown
-import json, os, pprint, requests
+import hmac
+import hashlib
+import json
+import os
+import pprint
 
 from flask import Flask, request, jsonify
 from github import Github
@@ -51,6 +55,16 @@ def repo_create():
         "error": False,
         "message": ""
     }
+    error_message = validate_signature(request, config.app_secret)
+
+    if error_message:
+        response = {
+            "error": True,
+            "message": f"Webhook Error: {error_message}",
+        }
+        return jsonify(response), 500
+
+
 
     # validate the payload
     payload = request.json
@@ -92,6 +106,42 @@ def repo_create():
     status_code = 500 if response['error'] else 200
     return jsonify(response), status_code
 
+def validate_signature(request, secret):
+
+    sig_header = request.headers.get('X-Hub-Signature')
+    if not sig_header:
+        return "Invalid signature"
+
+    sig_type, sig_received = sig_header.split('=')
+    if sig_type != 'sha1':
+        return "Invalid signature"
+
+    sig_local = hmac.new(
+        config.app_secret.encode('utf-8'),
+        digestmod=hashlib.sha1,
+        msg=request.body.encode('utf-8'),
+    ).hexdigest()
+
+    if not hmac.compare_digest(sig_local, sig_received):
+        return "Invalid signature - no match"
+    else:
+        return ""
+
+
+
+    # Get the signature from the payload
+    signature_header = payload['headers']['X-Hub-Signature']
+    sha_name, github_signature = signature_header.split('=')
+    if sha_name != 'sha256':
+        print('ERROR: X-Hub-Signature in payload headers was not sha256=****')
+        return False
+
+    # Create our own signature
+    body = payload['body']
+    local_signature = hmac.new(secret.encode('utf-8'), msg=body.encode('utf-8'), digestmod=hashlib.sha1)
+
+    # See if they match
+    return hmac.compare_digest(local_signature.hexdigest(), github_signature)
 
 def protect_repo_branch(repo_name, branch_name, repo_id):
     """
@@ -122,6 +172,19 @@ def protect_repo_branch(repo_name, branch_name, repo_id):
         team_push_restrictions=protection['push_restrictions_team'],
         dismissal_users=protection['dismissal_restrictions_users'],
         dismissal_teams=protection['dismissal_restrictions_teams'],
+    )
+
+    # Mention User in issue
+
+    body = ""
+    for key in protection.keys():
+        body += f'{key}: {protection[key]}\n'
+
+    body = f"The following branch protection options were set by {config.app_name}:\n```{body}```\n@{config.mention_user_in_issue}"
+
+    repo.create_issue(
+        title="Branch protection has been set",
+        body=body
     )
 
 

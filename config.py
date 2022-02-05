@@ -1,6 +1,7 @@
 import os
 
 class Config(object):
+    app_name = "NewRepoProtecto"
 
     # The name of the user to mention in the issue created.  Change this as needed to fit your configuration.
     mention_user_in_issue = os.getenv('NEWREPOPROTECTO_MENTION_USER_IN_ISSUE', "therealsteveg")
