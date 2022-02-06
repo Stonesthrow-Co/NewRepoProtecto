@@ -169,13 +169,14 @@ def protect_repo_branch(repo_name, branch_name, repo_id):
         dismissal_teams=protection['dismissal_restrictions_teams'],
     )
 
-    # Mention User in issue
-
-    body = ""
+    # Create an Issue and mention user
+    config_list = ""
     for key in protection.keys():
-        body += f'{key}: {protection[key]}\n'
+        config_list += f'{key}: {protection[key]}\n'
 
-    body = f"The following branch protection options were set by {config.app_name}:\n```{body}```\n@{config.mention_user_in_issue}"
+    body = f"The following branch protection options were set by _{config.app_name}_:\n```{config_list}```"
+    if config.mention_user_in_issue:
+        body += "\n@{config.mention_user_in_issue}"
 
     repo.create_issue(
         title="Branch protection has been set",

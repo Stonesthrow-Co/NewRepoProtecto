@@ -1,3 +1,9 @@
+"""
+    Author: Steve Gongage (steve@gongage.com)
+    Created: 2/4/2022
+    Purpose: Create a webhook for a given organization that sends all repository events to a given webhook url
+    Usage: see README.md
+"""
 from config import Config
 from github import Github
 import pprint

@@ -1,13 +1,12 @@
 import os
 
 class Config(object):
-    app_name = "NewRepoProtecto"
-
-    # The name of the user to mention in the issue created.  Change this as needed to fit your configuration.
-    mention_user_in_issue = os.getenv('NEWREPOPROTECTO_MENTION_USER_IN_ISSUE', "therealsteveg")
+    # Name of this app
+    app_name = "PROTECTONEWREPO"
 
     # The public root URL that GitHub Webhook expects to reach your service at
     public_webhook_url_root = "http://d81d-72-238-137-230.ngrok.io"
+
 
     # default protection - Update these settings to change your default protection
     protection_default = {
@@ -23,16 +22,21 @@ class Config(object):
         "dismissal_restrictions_teams": [],           # Teams who can dismiss
     }
 
-    github_org_name = os.getenv('NEWREPOPROTECTO_GITHUB_ORG_NAME')
+    # GITHUB_ORG_NAME - [REQUIRED] Name of the organization
+    github_org_name = os.getenv('PROTECTONEWREPO_GITHUB_ORG_NAME')
     if not github_org_name:
-        raise ValueError("This application requires the environment variable 'NEWREPOPROTECTO_GITHUB_ORG_NAME' be set.")
+        raise ValueError("This application requires the environment variable 'PROTECTONEWREPO_GITHUB_ORG_NAME' be set.")
 
-    # GITHUB_TOKEN - Unique token
-    github_token = os.getenv('NEWREPOPROTECTO_GITHUB_TOKEN')
+    # GITHUB_TOKEN - [REQUIRED] Unique token from GitHub
+    github_token = os.getenv('PROTECTONEWREPO_GITHUB_TOKEN')
     if not github_token:
-        raise ValueError("This application requires the environment variable 'NEWREPOPROTECTO_GITHUB_TOKEN' be set.")
+        raise ValueError("This application requires the environment variable 'PROTECTONEWREPO_GITHUB_TOKEN' be set.")
 
-    # APP_SECRET - This unique code is registered with your GitHub webhook and is used to confirm that the request sent to this application is from an expected source
-    app_secret = os.getenv('NEWREPOPROTECTO_APP_SECRET')
+    # APP_SECRET - [REQUIRED] This unique code is registered with your GitHub webhook and is used to confirm that the request sent to this application is from an expected source
+    app_secret = os.getenv('PROTECTONEWREPO_APP_SECRET')
     if not app_secret:
-        raise ValueError("This application requires the environment variable 'NEWREPOPROTECTO_APP_SECRET' be set.")
+        raise ValueError("This application requires the environment variable 'PROTECTONEWREPO_APP_SECRET' be set.")
+
+    # User Name - The name of the user to mention in the issue created.  Change this as needed to fit your configuration.
+    # If you don't want to mention a user, do not set this environment variable
+    mention_user_in_issue = os.getenv('PROTECTONEWREPO_MENTION_USER_IN_ISSUE')
