@@ -5,7 +5,7 @@ import json
 import os
 import pprint
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, abort
 from github import Github
 import markdown.extensions.fenced_code
 from config import Config
@@ -107,41 +107,36 @@ def repo_create():
     return jsonify(response), status_code
 
 def validate_signature(request, secret):
+    """
+    Compare the signature received by a web hook request against our stored app secret.
+    """
 
-    sig_header = request.headers.get('X-Hub-Signature')
-    if not sig_header:
-        return "Invalid signature"
+    if 'X-Hub-Signature-256' not in request.headers:
+        # missing a vital header
+        return "Invalid signature - not provided"
 
-    sig_type, sig_received = sig_header.split('=')
-    if sig_type != 'sha1':
-        return "Invalid signature"
+    # get the body of the webhook request
+    payload = request.data
 
-    sig_local = hmac.new(
-        config.app_secret.encode('utf-8'),
-        digestmod=hashlib.sha1,
-        msg=request.body.encode('utf-8'),
-    ).hexdigest()
+    # get the signature from the webhook request header
+    signature = request.headers['X-Hub-Signature-256']
 
-    if not hmac.compare_digest(sig_local, sig_received):
+    # encode our known secret to a byte array
+    secret = config.app_secret.encode()
+
+    # hmac generator - hash that payload using our local secret and sha256
+    hmac_generator = hmac.new(secret, payload, hashlib.sha256)
+
+    # add expected prefix and hex digest
+    local_digest = "sha256=" + hmac_generator.hexdigest()
+
+    # use secure comparison to see if what we receive matches what is expected
+    if hmac.compare_digest(local_digest, signature):
         return "Invalid signature - no match"
     else:
         return ""
 
 
-
-    # Get the signature from the payload
-    signature_header = payload['headers']['X-Hub-Signature']
-    sha_name, github_signature = signature_header.split('=')
-    if sha_name != 'sha256':
-        print('ERROR: X-Hub-Signature in payload headers was not sha256=****')
-        return False
-
-    # Create our own signature
-    body = payload['body']
-    local_signature = hmac.new(secret.encode('utf-8'), msg=body.encode('utf-8'), digestmod=hashlib.sha1)
-
-    # See if they match
-    return hmac.compare_digest(local_signature.hexdigest(), github_signature)
 
 def protect_repo_branch(repo_name, branch_name, repo_id):
     """
