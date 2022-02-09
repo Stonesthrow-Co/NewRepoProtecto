@@ -1,3 +1,11 @@
+"""
+    Author: Steve Gongage (steve@gongage.com)
+    Created: 2/4/2022
+    Purpose:
+        Main flask application.  See README.md for more info
+    Usage:
+
+"""
 import markdown
 import hmac
 import hashlib
@@ -20,19 +28,10 @@ env_vars = {
 }
 
 
-
-# todo: remove this, just for debugging
-pprint.pprint(env_vars)
-
 # Setup GitHub Access
 github = Github(env_vars['GITHUB_TOKEN'])
 
-#
-# for repo in github.get_user().get_repos():
-#     print(repo.name)
-
-
-
+# Route: Index
 @app.route("/")
 def index():
     """
@@ -45,70 +44,80 @@ def index():
     )
     return md_template_string
 
-
+# Route: webhook/repo
 @app.route("/webhook/repo", methods=['POST'])
 def repo_create():
     """
-
+    Webhook endpoint for 'repository' events
+    Valid Actions: ["created"]
     """
-    response = {
-        "error": False,
-        "message": ""
-    }
-    error_message = validate_signature(request, config.app_secret)
+    # Make sure the incoming request comes from a 'repository' event
+    if request.headers.get('X-GitHub-Event') != 'repository':
+        # Unexpected github event calling this webhook
+        return jsonify({
+            "error": True,
+            "message": f"Webhook Error: Invalid event '{request.headers.get('X-GitHub-Event')}'",
+        }), 500
 
+
+    # Validate the signature of the webhook to make sure we're receiving a legitimate webhook request
+    error_message = validate_signature(request)
     if error_message:
-        response = {
+        # Error validating the signature
+        return jsonify({
             "error": True,
             "message": f"Webhook Error: {error_message}",
-        }
-        return jsonify(response), 500
+        }), 500
 
-
-
-    # validate the payload
+    # get the JSON payload from the request
     payload = request.json
 
+    # Handle the payload based on the "action"
     if payload.get('action') == "created":
         # For "created" actions on the "repo" event
+
         if not payload.get('repository'):
-            # Not provided with a repository name in the payload
-            response = {
+            # Not provided with repository data in the payload
+            return jsonify({
                 "error": True,
                 "message": f"Repo_Created payload missing 'repository' data.",
-            }
-            return jsonify(response), 500
+            }), 500
 
         else:
             # Perform actions on the repo
-            json.dumps(payload, indent=2)
             repo = payload.get('repository', {})
             error_message = protect_repo_branch(
                 repo_name=repo.get('full_name'),
                 branch_name=repo.get('default_branch'),
-                repo_id=repo.get('id'),
             )
 
             if not error_message:
-                response['message'] = "Repo protection turned on"
+                # Completed successfully
+                return jsonify({
+                    "error": False,
+                    "message": "Repo protection turned on"
+                }), 200
+
             else:
-                response['error'] = True
-                response['message'] = error_message
+                # Error during the protection process
+                return jsonify({
+                    "error": True,
+                    "message": error_message
+                }), 500
 
     else:
-        response = {
+        # Error - unexpected webhook action
+        return jsonify({
             "error": True,
-            "message": f"Unexpected webhook action sent: {payload.get('action', 'NO ACTION')}",
-        }
-        return jsonify(response), 500
+            "message": f"Unexpected webhook action sent: {payload.get('action', 'NO ACTION FOUND')}",
+        }), 500
 
 
-    status_code = 500 if response['error'] else 200
-    return jsonify(response), status_code
-
-def validate_signature(request, secret):
+def validate_signature(request):
     """
     Compare the signature received by a web hook request against our stored app secret.
+    This is how we protect our endpoint and make sure we're only handling valid signatures.
+    In production, expand upon this and provide logging for observability layer.
     """
 
     if 'X-Hub-Signature-256' not in request.headers:
@@ -137,8 +146,7 @@ def validate_signature(request, secret):
         return ""
 
 
-
-def protect_repo_branch(repo_name, branch_name, repo_id):
+def protect_repo_branch(repo_name, branch_name):
     """
     Given a github repo and branch, check for existence, then protect the branch, and post a message to a new issue.
     """
@@ -146,16 +154,21 @@ def protect_repo_branch(repo_name, branch_name, repo_id):
         repo_name: {repo_name}
         branch_name: {branch_name}    
     """)
+
+    # Validate repo exists
     repo = github.get_repo(repo_name)
     if not repo:
         return f"Could not find repo with name: {repo_name}"
 
+    # Validate branch exists
     branch = repo.get_branch(branch_name)
     if not branch:
         return f"Could not find branch with name: {branch_name}"
 
-
+    # Get the protection configuration from config
     protection = config.protection_default
+
+    # Update the branch's protection
     branch.edit_protection(
         strict=protection['required_status_checks_strict'],
         contexts=protection['required_status_checks_contexts'],
@@ -169,42 +182,47 @@ def protect_repo_branch(repo_name, branch_name, repo_id):
         dismissal_teams=protection['dismissal_restrictions_teams'],
     )
 
-    # Create an Issue and mention user
+    # Now that the branch is protected, we need to create an Issue and mention the user
+
+    # Easy to read list of branch protections for the issue body
     config_list = ""
     for key in protection.keys():
         config_list += f'{key}: {protection[key]}\n'
 
+    # Add a little context to the top
     body = f"The following branch protection options were set by _{config.app_name}_:\n```{config_list}```"
     if config.mention_user_in_issue:
+        # if a user needs to be mentioned, include them at the end.
         body += "\n@{config.mention_user_in_issue}"
 
+    # Create the issue in this repo
     repo.create_issue(
         title="Branch protection has been set",
         body=body
     )
 
-
-
-    return ""
-
-
+    return "Branch protection has been set"
 
 
 @app.route("/repo_list")
 def repo_list():
     """
-    Returns a list of repos
+    Returns a list of repos for the configured org if you hit the endpoint.
+    This is available for convenience and can safely be removed if needed
     """
-    repo_list = ""
+    response_body = ""
     for repo in github.get_user().get_repos():
-        repo_list += f"<li>{repo.name}</li>\n"
+        response_body += f"<li>{repo.name}</li>\n"
 
     response = f"""
-        <h1>Your Organization's Repos</h1>    
-        <ul>{repo_list}</ul>
+        <h1>Repos for GitHub Org: {config.github_org_name}</h1>    
+        <ul>
+            {response_body}
+        </ul>
+        <p><a href="https://github.com/Stonesthrow-Co/NewRepoProtecto">Protecto New Repo</a></p>
     """
-
-
     return response
+
+
 if __name__ == "__main__":
     app.run()

@@ -1,11 +1,28 @@
+"""
+    Author: Steve Gongage (steve@gongage.com)
+    Created: 2/4/2022
+    Purpose:
+        Config File for ProtectoNewRepo
+
+    Usage:
+        Please update the values below as needed for your configuration.
+        Some values are expected to be pulled from environment variables.  Because these are sensitive secrets,
+        it's best to keep these values outside of clear text in your repo.
+        This config could be updated easily to pull these values from AWS Secrets Manager
+        or an external secrets source as well.
+
+"""
 import os
 
 class Config(object):
     # Name of this app
-    app_name = "PROTECTONEWREPO"
+    app_name = "ProtectoNewRepo"
 
-    # The public root URL that GitHub Webhook expects to reach your service at
-    public_webhook_url_root = "http://d81d-72-238-137-230.ngrok.io"
+    # Webhook Allows insecure connections? (changing this requires re-running
+    webhook_insecure_connections_allowed = True
+
+    # The endpoint path for webhook repo events
+    public_webhook_path_repo_events = "/webhook/repo"
 
 
     # default protection - Update these settings to change your default protection
@@ -16,11 +33,17 @@ class Config(object):
         "dismiss_stale_reviews": False,                 # Set to true if you want to automatically dismiss approving reviews when someone pushes a new commit.
         "require_code_owner_reviews": False,            # Blocks merging pull requests until code owners review them.
         "required_approving_review_count": 1,           # Specify the number of reviewers required to approve pull requests. Use a number between 1 and 6 or 0 to not require reviewers.
-        "push_restrictions_users": [],                # Restrict who can push to the protected branch. User, app, and team restrictions are only available for organization-owned repositories. Set to null to disable.
-        "push_restrictions_team": [],                 # Restrict who can push to the protected branch. User, app, and team restrictions are only available for organization-owned repositories. Set to null to disable.
-        "dismissal_restrictions_users": [],           # Users who can dismiss
-        "dismissal_restrictions_teams": [],           # Teams who can dismiss
+        "push_restrictions_users": [],                  # Restrict who can push to the protected branch. User, app, and team restrictions are only available for organization-owned repositories. Set to null to disable.
+        "push_restrictions_team": [],                   # Restrict who can push to the protected branch. User, app, and team restrictions are only available for organization-owned repositories. Set to null to disable.
+        "dismissal_restrictions_users": [],             # Users who can dismiss
+        "dismissal_restrictions_teams": [],             # Teams who can dismiss
     }
+    # The public root URL that GitHub Webhook expects to reach your service at.
+    # If using ngrok it will look something like this: http://d81d-72-238-137-230.ngrok.io
+    public_webhook_url_root = os.getenv('PROTECTONEWREPO_WEBHOOK_URL_ROOT')
+    if not public_webhook_url_root:
+        raise ValueError("This application requires the environment variable 'PROTECTONEWREPO_WEBHOOK_URL_ROOT' be set.")
+
 
     # GITHUB_ORG_NAME - [REQUIRED] Name of the organization
     github_org_name = os.getenv('PROTECTONEWREPO_GITHUB_ORG_NAME')
