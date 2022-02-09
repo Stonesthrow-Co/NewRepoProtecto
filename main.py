@@ -51,14 +51,6 @@ def repo_create():
     Webhook endpoint for 'repository' events
     Valid Actions: ["created"]
     """
-    # Make sure the incoming request comes from a 'repository' event
-    if request.headers.get('X-GitHub-Event') != 'repository':
-        # Unexpected github event calling this webhook
-        return jsonify({
-            "error": True,
-            "message": f"Webhook Error: Invalid event '{request.headers.get('X-GitHub-Event')}'",
-        }), 500
-
 
     # Validate the signature of the webhook to make sure we're receiving a legitimate webhook request
     error_message = validate_signature(request)
@@ -68,6 +60,23 @@ def repo_create():
             "error": True,
             "message": f"Webhook Error: {error_message}",
         }), 500
+
+
+    # Make sure the incoming request comes from a 'repository' event
+    if request.headers.get('X-GitHub-Event') == 'ping':
+        # A ping event is ok.  That's just GitHub checking if this endpoint is valid.
+        return jsonify({
+            "error": False,
+            "message": f"Pong"
+        }), 200
+
+    elif request.headers.get('X-GitHub-Event') != 'repository':
+        # Unexpected github event calling this webhook
+        return jsonify({
+            "error": True,
+            "message": f"Webhook Error: Invalid event '{request.headers.get('X-GitHub-Event')}'",
+        }), 500
+
 
     # get the JSON payload from the request
     payload = request.json

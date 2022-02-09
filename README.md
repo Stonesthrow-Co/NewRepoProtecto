@@ -28,6 +28,12 @@ After cloning this repo, run the following commands to get this up and running:
 
 # create a virtual environment
 $ python3 -m venv venv
+# activate the virtual environment
+$ source venv/bin/activate
+
+# Optional: update pip version if using an older version
+$ pip3 install -U pip
+$ pip3 install -U setuptools
 
 # install requirements
 $ pip3 install -r requirements.txt
@@ -37,11 +43,11 @@ $ export PROTECTONEWREPO_GITHUB_TOKEN=your_github_token
 $ export PROTECTONEWREPO_GITHUB_ORG_NAME=your_github_org_name
 $ export PROTECTONEWREPO_APP_SECRET=your_app_secret
 $ export PROTECTONEWREPO_MENTION_USER_IN_ISSUE=your_github_user_name
+$ export PROTECTONEWREPO_WEBHOOK_URL_ROOT=http://yourwebhookurl
 $ export FLASK_APP=main
 
 # Setup your organization's webook
-$ python3 
-
+$ python3 setup_webhook.py
 
 # Start Flask
 $ flask run
