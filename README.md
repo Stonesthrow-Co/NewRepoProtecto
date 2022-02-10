@@ -58,7 +58,11 @@ $ ngrok http 5000
 
 ```
 
-
+## Creating a New Repo
+In order to enable branch protection when creating a new repo via this webhook, the new repo must 
+meet the following requirements:
+- Be a public repo or a private repo with a GitHub Pro, GitHub Team, GitHub Enterprise, or GitHub Enterprise Server account. See [Configuring Branches and Merges](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/defining-the-mergeability-of-pull-requests)
+- Must be created with a branch at creation.  This can be done by initializing the repo with a "README.md" at creation.
 
 
 ## References and Further Info
