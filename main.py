@@ -225,7 +225,7 @@ def protect_repo_branch(repo_name, branch_name):
     body = f"The following branch protection options were set by _{config.app_name}_:\n```{config_list}```"
     if config.mention_user_in_issue:
         # if a user needs to be mentioned, include them at the end.
-        body += "\n@{config.mention_user_in_issue}"
+        body += f"\n@{config.mention_user_in_issue}"
 
     # Create the issue in this repo
     repo.create_issue(
