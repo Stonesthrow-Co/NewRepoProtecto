@@ -9,12 +9,10 @@
 import markdown
 import hmac
 import hashlib
-import json
-import os
-import pprint
 
 from flask import Flask, request, jsonify, abort
-from github import Github
+from github import Github, GithubException
+from github.GithubException import UnknownObjectException
 import markdown.extensions.fenced_code
 from config import Config
 
@@ -22,14 +20,8 @@ config = Config()
 
 app = Flask(__name__)
 
-# Environment variables that contain GitHub API keys.
-env_vars = {
-    "GITHUB_TOKEN": os.getenv('GITHUB_TOKEN')
-}
-
-
 # Setup GitHub Access
-github = Github(env_vars['GITHUB_TOKEN'])
+github = Github(config.github_token)
 
 # Route: Index
 @app.route("/")
@@ -51,14 +43,21 @@ def repo_create():
     Webhook endpoint for 'repository' events
     Valid Actions: ["created"]
     """
+
     # Make sure the incoming request comes from a 'repository' event
-    if request.headers.get('X-GitHub-Event') != 'repository':
+    if request.headers.get('X-GitHub-Event') == 'ping':
+        # A ping event is ok.  That's just GitHub checking if this endpoint is valid.
+        return jsonify({
+            "error": False,
+            "message": f"Pong"
+        }), 200
+
+    elif request.headers.get('X-GitHub-Event') != 'repository':
         # Unexpected github event calling this webhook
         return jsonify({
             "error": True,
             "message": f"Webhook Error: Invalid event '{request.headers.get('X-GitHub-Event')}'",
         }), 500
-
 
     # Validate the signature of the webhook to make sure we're receiving a legitimate webhook request
     error_message = validate_signature(request)
@@ -86,10 +85,42 @@ def repo_create():
         else:
             # Perform actions on the repo
             repo = payload.get('repository', {})
-            error_message = protect_repo_branch(
-                repo_name=repo.get('full_name'),
-                branch_name=repo.get('default_branch'),
-            )
+
+
+            try:
+                error_message = protect_repo_branch(
+                    repo_name=repo.get('full_name'),
+                    branch_name=repo.get('default_branch'),
+                )
+            except UnknownObjectException as ex:
+                # GitHub returned an UnknownObjectException which likely means we could not edit the default branch
+
+                # Todo: return to this and create a better solution
+                # This is a temporary hack that needs a better solution
+                # Sometimes the repo payload includes a default branch name for a branch that doesn't actually exist.
+                # This seems to be particularly true at the start of a new repo, which is when this script runs.
+                # Potential fix: reading in a list of existing branches and if the default isn't in there,
+                # falling back to a better repo.
+                if repo.get('default_branch') != 'main':
+                    try:
+                        error_message = f"UnknownObjectException occurred when protecting default repo branch '{repo.get('default_branch')}'.  Retrying with 'main' branch in case the default branch doesn't exist"
+                        print(error_message, "\n", ex)
+                        error_message = protect_repo_branch(
+                            repo_name=repo.get('full_name'),
+                            branch_name='main',
+                        )
+
+                    except Exception as ex:
+                        error_message = "Unknown Error occurred when protecting fallback default repo branch 'main'"
+                        print(error_message, "\n", ex)
+                else:
+                    error_message = f"UnknownObjectException occurred when protecting default repo branch '{repo.get('default_branch')}'."
+                    print(error_message, "\n", ex)
+
+
+            except Exception as ex:
+                error_message = f"Unexpected error occurred when protecting fallback default repo branch '{repo.get('default_branch')}'"
+                print(error_message, "\n", ex)
 
             if not error_message:
                 # Completed successfully
@@ -138,9 +169,8 @@ def validate_signature(request):
 
     # add expected prefix and hex digest
     local_digest = "sha256=" + hmac_generator.hexdigest()
-
     # use secure comparison to see if what we receive matches what is expected
-    if hmac.compare_digest(local_digest, signature):
+    if not hmac.compare_digest(local_digest, signature):
         return "Invalid signature - no match"
     else:
         return ""
@@ -159,11 +189,13 @@ def protect_repo_branch(repo_name, branch_name):
     repo = github.get_repo(repo_name)
     if not repo:
         return f"Could not find repo with name: {repo_name}"
+    print(f"Repo found: {repo_name}")
 
     # Validate branch exists
     branch = repo.get_branch(branch_name)
     if not branch:
         return f"Could not find branch with name: {branch_name}"
+    print(f"Branch found: {branch.name}")
 
     # Get the protection configuration from config
     protection = config.protection_default
@@ -193,7 +225,7 @@ def protect_repo_branch(repo_name, branch_name):
     body = f"The following branch protection options were set by _{config.app_name}_:\n```{config_list}```"
     if config.mention_user_in_issue:
         # if a user needs to be mentioned, include them at the end.
-        body += "\n@{config.mention_user_in_issue}"
+        body += f"\n@{config.mention_user_in_issue}"
 
     # Create the issue in this repo
     repo.create_issue(
@@ -201,7 +233,8 @@ def protect_repo_branch(repo_name, branch_name):
         body=body
     )
 
-    return "Branch protection has been set"
+    # Return with no error message = success!
+    return ""
 
 
 @app.route("/repo_list")
